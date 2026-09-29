@@ -1,1 +1,34 @@
+name: Build Desktop EXE
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    - name: Install Nativefier
+      run: npm install -g nativefier
+
+    - name: Build EXE App
+      run: |
+        nativefier --name "boqrain-pos" "https://alwaseela-ly.github.io/my-web-app/" --width 1280 --height 800 --single-instance
+
+    - name: Upload EXE Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: boqrain-pos-windows
+        path: boqrain-pos-win32-x64/
 
