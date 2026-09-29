@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>منظومة المبيعات الاحترافية</title>
+
+<!-- أيقونات -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<!-- خطوط -->
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+<!-- مكتبة الرسم البياني -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- مكتبة الباركود -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+<!-- Firebase (المزامنة السحابية) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue, update }
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAt5vANobN9k5e6RYCSKLL-bj5rVW3a_f4",
+    authDomain: "boqrain-pos.firebaseapp.com",
+    databaseURL: "https://boqrain-pos-default-rtdb.firebaseio.com",
+    projectId: "boqrain-pos",
+    storageBucket: "boqrain-pos.firebasestorage.app",
+    messagingSenderId: "769924955565",
+    appId: "1:769924955565:web:e732e36e5f9e9230967524"
+  };
+
+  try{
+    const fbApp = initializeApp(firebaseConfig);
+    const fbDB  = getDatabase(fbApp);
+    window.fbRef = ref;
+    window.fbSet = set;
+    window.fbGet = get;
+    window.fbOnValue = onValue;
+    window.fbUpdate = update;
+    window.fbDB = fbDB;
+
+    window.DEVICE_ID = localStorage.getItem('deviceId') ||
+      (() => {
+        const id = 'dev_' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('deviceId', id);
+        return id;
+      })();
+
+    window.FIREBASE_READY = true;
+    window.dispatchEvent(new Event('firebase-ready'));
+  }catch(e){
+    console.warn('Firebase init failed', e);
+    window.FIREBASE_READY = false;
+  }
+</script>
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ================= شاشة الدخول ================= -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <i class="fa-solid fa-store"></i>
+    </div>
+    <h1 id="loginTitle">متجري</h1>
+    <p id="loginSub">نظام إدارة المبيعات الاحترافي</p>
+
+    <div class="login-form">
+      <label>الدور:</label>
+      <select id="loginRole">
+        <option value="admin">👑 مدير</option>
+        <option value="emp">👤 كاشير</option>
+        <option value="stock">📦 مخزون</option>
+      </select>
+
+      <label>كلمة المرور:</label>
+      <input type="password" id="loginPass" placeholder="••••••">
+
+      <div id="loginError" class="login-error"></div>
+
+      <button class="btn primary big" onclick="tryLogin()">
+        <i class="fa-solid fa-right-to-bracket"></i> دخول
+      </button>
+
+      <button class="btn ghost" onclick="openRecoveryModal()" style="margin-top:8px;">
+        <i class="fa-solid fa-key"></i> نسيت كلمة المرور؟
+      </button>
+
+      <button class="btn ghost" onclick="openSetupModal()" style="margin-top:4px;">
+        <i class="fa-solid fa-user-plus"></i> إعداد أول مرة
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= التطبيق ================= -->
+<div id="app" class="app hidden">
+
+  <!-- الشريط الجانبي -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img id="storeLogoImg" class="brand-logo hidden" alt="logo">
+      <i id="storeLogoIcon" class="fa-solid fa-store brand-icon"></i>
+      <span id="brandName">متجري</span>
+    </div>
+
+    <nav class="nav">
+      <a class="nav-item active" data-page="dashboard"><i class="fa-solid fa-chart-line"></i> لوحة التحكم</a>
+      <a class="nav-item" data-page="pos"><i class="fa-solid fa-cash-register"></i> نقطة البيع</a>
+      <a class="nav-item" data-page="invoices"><i class="fa-solid fa-file-invoice"></i> الفواتير</a>
+      <a class="nav-item" data-page="returns"><i class="fa-solid fa-rotate-left"></i> المرتجعات</a>
+      <a class="nav-item" data-page="products"><i class="fa-solid fa-box"></i> المنتجات</a>
+      <a class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> المخزون</a>
+      <a class="nav-item" data-page="customers"><i class="fa-solid fa-users"></i> العملاء</a>
+      <a class="nav-item" data-page="debts"><i class="fa-solid fa-hand-holding-dollar"></i> الديون</a>
+      <a class="nav-item admin-only" data-page="expenses"><i class="fa-solid fa-money-bill-wave"></i> المصروفات</a>
+      <a class="nav-item admin-only" data-page="stats"><i class="fa-solid fa-chart-pie"></i> الإحصائيات</a>
+      <a class="nav-item admin-only" data-page="users"><i class="fa-solid fa-user-shield"></i> المستخدمون</a>
+      <a class="nav-item admin-only" data-page="settings"><i class="fa-solid fa-gear"></i> الإعدادات</a>
+      <a class="nav-item admin-only" data-page="backup"><i class="fa-solid fa-cloud"></i> النسخ والمزامنة</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div id="userTag" class="user-tag">👑 مدير</div>
+      <button class="btn ghost small" onclick="lockScreen()"><i class="fa-solid fa-lock"></i> قفل</button>
+      <button class="btn ghost small" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>
+    </div>
+  </aside>
+
+  <!-- المحتوى -->
+  <main class="content">
+
+    <!-- ============ لوحة التحكم ============ -->
+    <section id="page-dashboard" class="page active">
+      <h1 class="page-title">📊 لوحة التحكم</h1>
+      <div class="stats-grid">
+        <div class="stat-card blue"><i class="fa-solid fa-sack-dollar"></i><h3>مبيعات اليوم</h3><p id="dbSales">0</p></div>
+        <div class="stat-card green"><i class="fa-solid fa-file-invoice"></i><h3>فواتير اليوم</h3><p id="dbInvoices">0</p></div>
+        <div class="stat-card orange"><i class="fa-solid fa-users"></i><h3>العملاء</h3><p id="dbCustomers">0</p></div>
+        <div class="stat-card red"><i class="fa-solid fa-triangle-exclamation"></i><h3>نقص المخزون</h3><p id="dbLowStock">0</p></div>
+      </div>
+      <div class="charts-grid">
+        <div class="card"><h3>مبيعات 7 أيام</h3><canvas id="chart7days" height="140"></canvas></div>
+        <div class="card"><h3>الأكثر مبيعاً</h3><canvas id="chartTop" height="140"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>آخر الفواتير</h3>
+        <table><thead><tr><th>#</th><th>العميل</th><th>الإجمالي</th><th>التاريخ</th></tr></thead>
+        <tbody id="recentInv"></tbody></table>
+      </div>
+    </section>
+
+    <!-- ============ نقطة البيع ============ -->
+    <section id="page-pos" class="page">
+      <h1 class="page-title">💰 نقطة البيع</h1>
+      <div class="pos-layout">
+        <div class="pos-left">
+          <div class="tabs-bar">
+            <div id="tabsList" class="tabs-list"></div>
+            <button class="btn-icon" onclick="newTab()" title="فاتورة جديدة"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <div class="pos-toolbar">
+            <input type="text" id="posSearch" placeholder="🔍 ابحث عن منتج أو امسح الباركود...">
+            <select id="posCategory"><option value="">كل الأصناف</option></select>
+            <button class="btn" onclick="focusBarcodeInput()"><i class="fa-solid fa-barcode"></i> الماسح</button>
+          </div>
+          <div id="posGrid" class="pos-grid"></div>
+        </div>
+
+        <div class="pos-right">
+          <div class="cart-head">
+            <h3>🛒 الفاتورة</h3>
+            <div class="cart-actions">
+              <button class="btn-icon" onclick="holdTab()" title="تعليق"><i class="fa-solid fa-pause"></i></button>
+              <button class="btn-icon" onclick="clearTab()" title="تفريغ"><i class="fa-solid fa-eraser"></i></button>
+            </div>
+          </div>
+          <input type="text" id="cartCustomer" list="customersList" placeholder="اسم العميل (اختياري)">
+          <datalist id="customersList"></datalist>
+
+          <div id="cartItems" class="cart-items"></div>
+
+          <div class="cart-totals">
+            <div><span>المجموع:</span> <b id="subTotal">0</b></div>
+            <div><span>الخصم:</span> <input type="number" id="discount" value="0"></div>
+            <div><span>الضريبة %:</span> <input type="number" id="taxRate" value="0"></div>
+            <div class="grand"><span>الإجمالي:</span> <b id="grandTotal">0</b></div>
+          </div>
+
+          <button class="btn primary big" onclick="checkout()">
+            <i class="fa-solid fa-credit-card"></i> دفع (F9)
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ الفواتير ============ -->
+    <section id="page-invoices" class="page">
+      <h1 class="page-title">📄 الفواتير</h1>
+      <div class="filters">
+        <input type="date" id="invFrom">
+        <input type="date" id="invTo">
+        <input type="text" id="invSearch" placeholder="🔍 بحث...">
+        <button class="btn" onclick="resetInvFilters()">مسح</button>
+        <button class="btn" onclick="printReport('invoices')"><i class="fa-solid fa-print"></i> طباعة التقرير</button>
+      </div>
+      <table id="invTable" class="data-table">
+        <thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th><th>المدفوع</th><th>الباقي</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ============ المرتجعات ============ -->
+    <section id="page-returns" class="page">
+      <h1 class="page-title">🔄 المرتجعات</h1>
+      <div class="card">
+        <h3>إنشاء مرتجع</h3>
+        <input type="text" id="retInvNum" placeholder="رقم الفاتورة الأصلية">
+        <button class="btn primary" onclick="startReturn()">بدء المرتجع</button>
+      </div>
+      <input type="text" id="retSearch" placeholder="🔍 بحث...">
+      <table id="retTable" class="data-table">
+        <thead><tr><th>رقم المرتجع</th><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>السبب</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ============ المنتجات ============ -->
+    <section id="page-products" class="page">
+      <h1 class="page-title">📦 المنتجات</h1>
+      <div class="filters">
+        <input type="text" id="prodSearch" placeholder="🔍 بحث بالاسم أو الباركود...">
+        <button class="btn primary" onclick="openProductModal()"><i class="fa-solid fa-plus"></i> منتج جديد</button>
+      </div>
+      <table id="prodTable" class="data-table">
+        <thead><tr><th>الباركود</th><th>الاسم</th><th>الصنف</th><th>السعر</th><th>التكلفة</th><th>الكمية</th><th>إجراءات</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <datalist id="catList"></datalist>
+    </section>
+
+    <!-- ============ المخزون ============ -->
+    <section id="page-inventory" class="page">
+      <h1 class="page-title">🏭 المخزون</h1>
+      <div class="stats-grid">
+        <div class="stat-card blue"><h3>عدد المنتجات</h3><p id="invTotal">0</p></div>
+        <div class="stat-card orange"><h3>نقص المخزون</h3><p id="invLow">0</p></div>
+        <div class="stat-card red"><h3>نفد المخزون</h3><p id="invOut">0</p></div>
+        <div class="stat-card green"><h3>قيمة المخزون</h3><p id="invValue">0</p></div>
+      </div>
+      <div class="card">
+        <h3>منتجات تحتاج تعبئة</h3>
+        <table id="lowTable" class="data-table">
+          <thead><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>تعبئة</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ العملاء ============ -->
+    <section id="page-customers" class="page">
+      <h1 class="page-title">👥 العملاء</h1>
+      <div class="filters">
+        <input type="text" id="custSearch" placeholder="🔍 بحث...">
+        <button class="btn primary" onclick="openCustomerModal()"><i class="fa-solid fa-plus"></i> عميل جديد</button>
+      </div>
+      <table id="custTable" class="data-table">
+        <thead><tr><th>الاسم</th><th>الهاتف</th><th>الفواتير</th><th>إجمالي الشراء</th><th>الدين</th><th>إجراءات</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ============ الديون ============ -->
+    <section id="page-debts" class="page">
+      <h1 class="page-title">💸 الديون</h1>
+      <div class="stats-grid">
+        <div class="stat-card red"><h3>إجمالي الديون</h3><p id="debtTotal">0</p></div>
+        <div class="stat-card green"><h3>إجمالي المسدد</h3><p id="debtPaid">0</p></div>
+      </div>
+      <table id="debtTable" class="data-table">
+        <thead><tr><th>العميل</th><th>الهاتف</th><th>الدين</th><th>إجراءات</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ============ المصروفات ============ -->
+    <section id="page-expenses" class="page admin-only">
+      <h1 class="page-title">💵 المصروفات</h1>
+      <div class="filters">
+        <input type="month" id="expMonth">
+        <button class="btn primary" onclick="openExpenseModal()"><i class="fa-solid fa-plus"></i> مصروف جديد</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card red"><h3>مصروفات الشهر</h3><p id="expMonthTotal">0</p></div>
+        <div class="stat-card blue"><h3>عدد المصروفات</h3><p id="expCount">0</p></div>
+      </div>
+      <table id="expTable" class="data-table">
+        <thead><tr><th>التاريخ</th><th>النوع</th><th>الوصف</th><th>المبلغ</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ============ الإحصائيات ============ -->
+    <section id="page-stats" class="page admin-only">
+      <h1 class="page-title">📈 الإحصائيات</h1>
+      <div class="filters">
+        <input type="date" id="stFrom">
+        <input type="date" id="stTo">
+        <button class="btn" onclick="renderStats()">تحديث</button>
+        <button class="btn" onclick="printReport('stats')"><i class="fa-solid fa-print"></i> طباعة</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card green"><h3>إجمالي المبيعات</h3><p id="stSales">0</p></div>
+        <div class="stat-card blue"><h3>عدد الفواتير</h3><p id="stCount">0</p></div>
+        <div class="stat-card blue"><h3>متوسط الفاتورة</h3><p id="stAvg">0</p></div>
+        <div class="stat-card orange"><h3>التكلفة</h3><p id="stCost">0</p></div>
+        <div class="stat-card green"><h3>صافي الربح</h3><p id="stProfit">0</p></div>
+        <div class="stat-card red"><h3>المرتجعات</h3><p id="stReturns">0</p></div>
+      </div>
+      <div class="card">
+        <h3>الأكثر مبيعاً</h3>
+        <table id="topTable" class="data-table">
+          <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th><th>الربح</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ المستخدمون ============ -->
+    <section id="page-users" class="page admin-only">
+      <h1 class="page-title">🔐 المستخدمون وكلمات المرور</h1>
+
+      <div class="card">
+        <h3>تفعيل كلمات المرور</h3>
+        <label class="switch">
+          <input type="checkbox" id="passwordsEnabled" onchange="togglePasswords()">
+          <span>تفعيل نظام كلمات المرور</span>
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>تغيير كلمات المرور</h3>
+        <div class="form-row">
+          <label>👑 كلمة مرور المدير:</label>
+          <div class="input-group">
+            <input type="password" id="pwdAdmin" placeholder="اتركها فارغة لعدم التغيير">
+            <button class="btn-icon" onclick="togglePwd('pwdAdmin')"><i class="fa-solid fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>👤 كلمة مرور الكاشير:</label>
+          <div class="input-group">
+            <input type="password" id="pwdEmp" placeholder="اتركها فارغة لعدم التغيير">
+            <button class="btn-icon" onclick="togglePwd('pwdEmp')"><i class="fa-solid fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>📦 كلمة مرور المخزون:</label>
+          <div class="input-group">
+            <input type="password" id="pwdStock" placeholder="اتركها فارغة لعدم التغيير">
+            <button class="btn-icon" onclick="togglePwd('pwdStock')"><i class="fa-solid fa-eye"></i></button>
+          </div>
+        </div>
+        <button class="btn primary" onclick="savePasswords()"><i class="fa-solid fa-save"></i> حفظ</button>
+        <button class="btn danger" onclick="resetPasswords()">إعادة تعيين الكل</button>
+      </div>
+
+      <!-- استعادة كلمة السر -->
+      <div class="card">
+        <h3>🔑 استعادة كلمة المرور</h3>
+        <div class="form-row">
+          <label>سؤال الأمان:</label>
+          <input type="text" id="securityQuestion" placeholder="مثال: ما اسم مدرستك الأولى؟">
+        </div>
+        <div class="form-row">
+          <label>الجواب:</label>
+          <div class="input-group">
+            <input type="password" id="securityAnswer" placeholder="اتركه فارغاً لعدم التغيير">
+            <button class="btn-icon" onclick="togglePwd('securityAnswer')"><i class="fa-solid fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>رقم الاستعادة (احتياطي):</label>
+          <input type="text" id="recoveryCode" placeholder="مثال: 0599123456 أو بريدك">
+        </div>
+        <button class="btn primary" onclick="saveSecurity()"><i class="fa-solid fa-shield-halved"></i> حفظ بيانات الاستعادة</button>
+        <div id="securityStatus" class="muted" style="margin-top:8px;"></div>
+      </div>
+    </section>
+
+    <!-- ============ الإعدادات ============ -->
+    <section id="page-settings" class="page admin-only">
+      <h1 class="page-title">⚙️ الإعدادات</h1>
+
+      <div class="card">
+        <h3>بيانات المتجر</h3>
+        <div class="form-row"><label>اسم المتجر:</label><input type="text" id="setStoreName"></div>
+        <div class="form-row"><label>الهاتف:</label><input type="text" id="setStorePhone"></div>
+        <div class="form-row"><label>العنوان:</label><input type="text" id="setStoreAddr"></div>
+        <div class="form-row"><label>العملة:</label><input type="text" id="setCurrency"></div>
+        <div class="form-row"><label>الشعار:</label><input type="file" id="setLogo" accept="image/*">
+          <div id="logoPreview" style="margin-top:8px;"></div>
+        </div>
+        <button class="btn primary" onclick="saveStore()">حفظ</button>
+      </div>
+
+      <div class="card">
+        <h3>التفضيلات</h3>
+        <label class="switch"><input type="checkbox" id="setDarkMode"><span>الوضع الليلي</span></label>
+        <label class="switch"><input type="checkbox" id="setAutoPrint"><span>طباعة تلقائية</span></label>
+        <label class="switch"><input type="checkbox" id="setSound"><span>الأصوات</span></label>
+        <div class="form-row"><label>حد التنبيه للمخزون:</label><input type="number" id="setLowStock"></div>
+        <div class="form-row"><label>الضريبة %:</label><input type="number" id="setTax"></div>
+        <button class="btn primary" onclick="savePrefs()">حفظ</button>
+      </div>
+    </section>
+
+    <!-- ============ النسخ والمزامنة ============ -->
+    <section id="page-backup" class="page admin-only">
+      <h1 class="page-title">☁️ النسخ الاحتياطي والمزامنة</h1>
+
+      <div class="card">
+        <h3>المزامنة السحابية</h3>
+        <div id="syncStatus" class="sync-status">جارٍ الاتصال...</div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="pushToCloud(false)">
+            <i class="fa-solid fa-cloud-arrow-up"></i> رفع للسحابة
+          </button>
+          <button class="btn" onclick="pullFromCloud(false)">
+            <i class="fa-solid fa-cloud-arrow-down"></i> سحب من السحابة
+          </button>
+          <button class="btn" id="syncToggleBtn" onclick="toggleSync()">تبديل المزامنة</button>
+        </div>
+        <p class="muted">معرّف الجهاز: <b id="deviceIdView"></b></p>
+      </div>
+
+      <div class="card">
+        <h3>نسخة محلية</h3>
+        <div class="btn-row">
+          <button class="btn primary" onclick="exportBackup()"><i class="fa-solid fa-download"></i> تنزيل نسخة JSON</button>
+          <button class="btn" onclick="exportCSV()"><i class="fa-solid fa-file-csv"></i> تصدير الفواتير CSV</button>
+        </div>
+        <div class="form-row">
+          <label>استعادة من ملف:</label>
+          <input type="file" id="restoreFile" accept=".json">
+          <button class="btn danger" onclick="restoreBackup()">استعادة</button>
+        </div>
+      </div>
+
+      <div class="card danger-card">
+        <h3>منطقة خطرة</h3>
+        <button class="btn danger" onclick="wipeAll()"><i class="fa-solid fa-trash"></i> مسح كل البيانات</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ================= النوافذ المنبثقة ================= -->
+
+<!-- دفع -->
+<div id="payModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>💰 الدفع</h2>
+    <p>الإجمالي: <b id="payTotal"></b></p>
+    <div class="form-row"><label>طريقة الدفع:</label>
+      <select id="payMethod">
+        <option value="cash">نقدي</option>
+        <option value="credit">آجل (دين)</option>
+        <option value="partial">دفع جزئي</option>
+      </select>
+    </div>
+    <div id="partialBox" class="hidden">
+      <div class="form-row"><label>المبلغ المدفوع:</label><input type="number" id="payPaid"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('payModal')">إلغاء</button>
+      <button class="btn primary" onclick="confirmPay()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<!-- طباعة -->
+<div id="printModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>🖨️ خيارات الطباعة</h2>
+    <div class="modal-actions">
+      <button class="btn" onclick="printLast('normal')"><i class="fa-solid fa-print"></i> A4 عادي</button>
+      <button class="btn primary" onclick="printLast('thermal')"><i class="fa-solid fa-receipt"></i> حراري 80mm</button>
+      <button class="btn ghost" onclick="closeModal('printModal')">تخطي</button>
+    </div>
+  </div>
+</div>
+
+<!-- منتج -->
+<div id="productModal" class="modal hidden">
+  <div class="modal-card">
+    <h2 id="prodModalTitle">منتج</h2>
+    <div class="form-row"><label>الاسم:</label><input type="text" id="pName"></div>
+    <div class="form-row"><label>الباركود:</label>
+      <div class="input-group">
+        <input type="text" id="pBarcode">
+        <button class="btn-icon" onclick="genBarcode()"><i class="fa-solid fa-barcode"></i></button>
+      </div>
+    </div>
+    <div class="form-row"><label>الصنف:</label><input type="text" id="pCategory" list="catList"></div>
+    <div class="form-row"><label>السعر:</label><input type="number" id="pPrice" step="0.01"></div>
+    <div class="form-row"><label>التكلفة:</label><input type="number" id="pCost" step="0.01" value="0"></div>
+    <div class="form-row"><label>الكمية:</label><input type="number" id="pQty" value="0"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('productModal')">إلغاء</button>
+      <button class="btn primary" onclick="saveProduct()">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<!-- عميل -->
+<div id="customerModal" class="modal hidden">
+  <div class="modal-card">
+    <h2 id="custModalTitle">عميل</h2>
+    <div class="form-row"><label>الاسم:</label><input type="text" id="cName"></div>
+    <div class="form-row"><label>الهاتف:</label><input type="text" id="cPhone"></div>
+    <div class="form-row"><label>الرصيد:</label><input type="number" id="cBalance" value="0" step="0.01"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('customerModal')">إلغاء</button>
+      <button class="btn primary" onclick="saveCustomer()">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<!-- مصروف -->
+<div id="expenseModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>مصروف جديد</h2>
+    <div class="form-row"><label>النوع:</label>
+      <select id="eType">
+        <option>إيجار</option><option>رواتب</option><option>كهرباء</option>
+        <option>ماء</option><option>إنترنت</option><option>نقل</option>
+        <option>صيانة</option><option>أخرى</option>
+      </select>
+    </div>
+    <div class="form-row"><label>الوصف:</label><input type="text" id="eDesc"></div>
+    <div class="form-row"><label>المبلغ:</label><input type="number" id="eAmount" step="0.01"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('expenseModal')">إلغاء</button>
+      <button class="btn primary" onclick="saveExpense()">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<!-- مرتجع -->
+<div id="returnModal" class="modal hidden">
+  <div class="modal-card wide">
+    <h2>مرتجع</h2>
+    <div id="returnItems"></div>
+    <div class="form-row"><label>السبب:</label><input type="text" id="returnReason"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('returnModal')">إلغاء</button>
+      <button class="btn primary" onclick="confirmReturn()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<!-- كشف حساب -->
+<div id="statementModal" class="modal hidden">
+  <div class="modal-card wide">
+    <h2>كشف حساب</h2>
+    <div id="statementBody"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('statementModal')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- استعادة كلمة السر -->
+<div id="recoveryModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>🔑 استعادة كلمة المرور</h2>
+    <p>أجب عن سؤال الأمان أو أدخل رقم الاستعادة.</p>
+    <div class="form-row"><label>الدور:</label>
+      <select id="recRole">
+        <option value="admin">👑 مدير</option>
+        <option value="emp">👤 كاشير</option>
+        <option value="stock">📦 مخزون</option>
+      </select>
+    </div>
+    <div class="form-row"><label>سؤال الأمان:</label><input type="text" id="recQuestion" readonly></div>
+    <div class="form-row"><label>الجواب:</label><input type="text" id="recAnswer"></div>
+    <div class="form-row"><label>أو رقم/بريد الاستعادة:</label><input type="text" id="recPhone"></div>
+    <div class="form-row"><label>كلمة المرور الجديدة:</label>
+      <div class="input-group">
+        <input type="password" id="recNewPass">
+        <button class="btn-icon" onclick="togglePwd('recNewPass')"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </div>
+    <div id="recError" class="login-error"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('recoveryModal')">إلغاء</button>
+      <button class="btn primary" onclick="doRecover()">استعادة</button>
+    </div>
+  </div>
+</div>
+
+<!-- إعداد أول مرة -->
+<div id="setupModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>🚀 الإعداد الأول</h2>
+    <p>أنشئ كلمة مرور للمدير وبيانات الاستعادة لتفعيل النظام.</p>
+    <div class="form-row"><label>كلمة مرور المدير:</label>
+      <div class="input-group">
+        <input type="password" id="setupAdmin">
+        <button class="btn-icon" onclick="togglePwd('setupAdmin')"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </div>
+    <div class="form-row"><label>تأكيد كلمة المرور:</label>
+      <div class="input-group">
+        <input type="password" id="setupAdmin2">
+        <button class="btn-icon" onclick="togglePwd('setupAdmin2')"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </div>
+    <div class="form-row"><label>سؤال الأمان:</label>
+      <input type="text" id="setupQuestion" placeholder="مثال: ما اسم مدرستك الأولى؟">
+    </div>
+    <div class="form-row"><label>الجواب:</label>
+      <div class="input-group">
+        <input type="password" id="setupAnswer">
+        <button class="btn-icon" onclick="togglePwd('setupAnswer')"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </div>
+    <div class="form-row"><label>رقم/بريد الاستعادة:</label>
+      <input type="text" id="setupRecovery" placeholder="رقم هاتف أو بريد إلكتروني">
+    </div>
+    <div id="setupError" class="login-error"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('setupModal')">لاحقاً</button>
+      <button class="btn primary" onclick="doFirstSetup()">تفعيل النظام</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toastBox" class="toast-box"></div>
+
+<!-- منطقة الطباعة (مخفية) -->
+<div id="printArea" class="print-area"></div>
+
+<!-- شارة حالة الماسح -->
+<div id="barcodeStatus" class="barcode-status"><i class="fa-solid fa-barcode"></i> <span>الماسح جاهز</span></div>
+
+<script src="app.js"></script>
+</body>
+</html>
