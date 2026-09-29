@@ -17,16 +17,62 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 18
 
-    - name: Install Nativefier
-      run: npm install -g nativefier
+    - name: Prepare Package File
+      shell: bash
+      run: |
+        cat << 'EOF' > package.json
+        {
+          "name": "boqrain-pos",
+          "version": "1.0.0",
+          "main": "main.js",
+          "scripts": {
+            "start": "electron ."
+          }
+        }
+        EOF
 
-    - name: Build EXE App
-      run: nativefier "https://alwaseela-ly.github.io/my-web-app/" --name "boqrain-pos" --width 1280 --height 800 --disable-context-isolation --disable-web-security --single-instance
+    - name: Prepare Main Electron Script
+      shell: bash
+      run: |
+        cat << 'EOF' > main.js
+        const { app, BrowserWindow } = require('electron');
+        const path = require('path');
+
+        function createWindow () {
+          const win = new BrowserWindow({
+            width: 1280,
+            height: 800,
+            autoHideMenuBar: true,
+            webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false
+            }
+          });
+
+          win.loadFile('index.html');
+        }
+
+        app.whenReady().then(createWindow);
+
+        app.on('window-all-closed', () => {
+          if (process.platform !== 'darwin') app.quit();
+        });
+        EOF
+
+    - name: Install Dependencies
+      run: |
+        npm install electron --save-dev
+        npm install -g electron-packager
+
+    - name: Package App to EXE
+      run: |
+        npx electron-packager . boqrain-pos --platform=win32 --arch=x64 --out=dist --overwrite
 
     - name: Upload EXE Artifact
       uses: actions/upload-artifact@v4
       with:
         name: boqrain-pos-windows
-        path: boqrain-pos-win32-x64/
+        path: dist/boqrain-pos-win32-x64/
