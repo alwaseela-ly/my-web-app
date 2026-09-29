@@ -12,41 +12,21 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: 18
 
-    - name: Create Package File
-      shell: cmd
-      run: |
-        echo {"name": "boqrain-pos", "version": "1.0.0", "main": "main.js"} > package.json
+    - name: Install Nativefier
+      run: npm install -g nativefier
 
-    - name: Create Main File
-      shell: cmd
-      run: |
-        (
-        echo const { app, BrowserWindow } = require('electron');
-        echo function createWindow () {
-        echo   const win = new BrowserWindow({ width: 1280, height: 800, autoHideMenuBar: true });
-        echo   win.loadURL('https://alwaseela-ly.github.io/my-web-app/');
-        echo }
-        echo app.whenReady().then(createWindow);
-        ) > main.js
-
-    - name: Install Dependencies
-      run: |
-        npm install electron electron-packer -g
-        npm install electron --save-dev
-
-    - name: Package App to EXE
-      run: |
-        npx electron-packager . boqrain-pos --platform=win32 --arch=x64 --out=dist --overwrite
+    - name: Build EXE App
+      run: nativefier --name "boqrain-pos" "https://alwaseela-ly.github.io/my-web-app/" --width 1280 --height 800 --ignore-certificate
 
     - name: Upload EXE Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: boqrain-pos-windows
-        path: dist/boqrain-pos-win32-x64/
+        path: boqrain-pos-win32-x64/
